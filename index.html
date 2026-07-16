@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Cam Cam ✨</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="header-container">
+      <div class="app-logo">
+        <svg class="gemini-star" viewBox="0 0 100 100" width="28" height="28" style="transform: translateY(2px);">
+          <path d="M 50 0 Q 50 50, 100 50 Q 50 50, 50 100 Q 50 50, 0 50 Q 50 50, 50 0 Z" fill="url(#gemini-gradient)"/>
+          <defs>
+            <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4285F4" />
+              <stop offset="50%" stop-color="#9B51E0" />
+              <stop offset="100%" stop-color="#E040FB" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="logo-text">Gemini <span class="accent-text">Cam Cam</span></span>
+      </div>
+      <div id="mode-badge" class="mode-badge mock-badge">
+        <i class="fa-solid fa-flask"></i> Demo Mock Mode
+      </div>
+    </div>
+  </header>
+
+  <main class="app-container">
+    <!-- Configuration Modal / Settings Trigger -->
+    <div class="settings-trigger" id="settings-btn" title="API Settings">
+      <i class="fa-solid fa-cog"></i>
+    </div>
+
+    <!-- API Settings Panel (collapsible) -->
+    <div class="settings-panel hidden" id="settings-panel">
+      <div class="settings-header">
+        <h3><i class="fa-solid fa-key"></i> API Configuration</h3>
+        <span class="close-btn" id="close-settings">&times;</span>
+      </div>
+      <div class="settings-body">
+        <p>To enable Google Gemini (Nano Banana) image generation, paste your Google AI Studio API key here. Otherwise, the app runs in Mock Mode.</p>
+        <div class="form-group">
+          <label for="api-token-input">Google Gemini API Key:</label>
+          <input type="password" id="api-token-input" placeholder="AIzaSy..." autocomplete="off">
+        </div>
+        <button id="save-token-btn" class="btn btn-primary btn-sm">Save Key</button>
+        <button id="clear-token-btn" class="btn btn-danger btn-sm">Clear Key</button>
+      </div>
+    </div>
+
+    <!-- MAIN STEPS WIZARD -->
+    <div class="wizard-steps">
+      <!-- STEP 1: CAPTURE/UPLOAD SELFIE -->
+      <section class="card wizard-card" id="step-1">
+        <div class="card-header">
+          <div class="step-num">1</div>
+          <h2>Take Your Photo</h2>
+        </div>
+        <div class="card-body">
+          <p class="description">Snap a selfie or upload a photo of yourself. Gemini Cam Cam will automatically add Cam next to you!</p>
+          
+          <div class="camera-panel">
+            <div class="camera-stream-wrapper" id="camera-stream-wrapper">
+              <video id="camera-video" autoplay playsinline class="hidden"></video>
+              <canvas id="camera-canvas" class="hidden"></canvas>
+              
+              <!-- Placeholder states -->
+              <div class="camera-placeholder" id="camera-placeholder">
+                <i class="fa-solid fa-camera camera-placeholder-icon"></i>
+                <p>Start your camera to snap a photo, or upload an existing file.</p>
+              </div>
+            </div>
+
+            <div class="camera-controls">
+              <button class="btn btn-secondary" id="start-camera-btn">
+                <i class="fa-solid fa-video"></i> Open Camera
+              </button>
+              <button class="btn btn-primary hidden" id="capture-photo-btn">
+                <i class="fa-solid fa-circle-dot"></i> Snap Photo
+              </button>
+              <button class="btn btn-secondary" id="upload-selfie-btn">
+                <i class="fa-solid fa-upload"></i> Upload Image
+              </button>
+              <input type="file" id="selfie-file-input" accept="image/*" class="hidden-input">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2: COMPOSER WORKSPACE -->
+      <section class="card wizard-card disabled" id="step-2">
+        <div class="card-header">
+          <div class="step-num">2</div>
+          <h2>Your Masterpiece ✨</h2>
+        </div>
+        <div class="card-body">
+          <p class="description">Gemini Cam Cam has automatically added Cam next to you, smiling for the camera!</p>
+
+          <div class="workspace-area">
+            <div class="canvas-container" id="canvas-container">
+              <!-- Interactive canvas layers -->
+              <canvas id="composer-canvas"></canvas>
+            </div>
+
+
+          </div>
+
+          <div class="action-bar text-center">
+            <button class="btn btn-accent btn-large" id="download-btn">
+              <i class="fa-solid fa-file-arrow-down"></i> Save Masterpiece ✨
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- LOADING SPINNER MODAL -->
+  <div class="loader-overlay hidden" id="loader-overlay">
+    <div class="loader-content">
+      <div class="gemini-spinner">
+        <svg viewBox="0 0 100 100" width="70" height="70">
+          <path d="M 50 0 Q 50 50, 100 50 Q 50 50, 50 100 Q 50 50, 0 50 Q 50 50, 50 0 Z" fill="url(#gemini-spinner-gradient)"/>
+          <defs>
+            <linearGradient id="gemini-spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4285F4" />
+              <stop offset="50%" stop-color="#9B51E0" />
+              <stop offset="100%" stop-color="#E040FB" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h3 id="loader-title">Mixing Cam Cam...</h3>
+      <p id="loader-msg">Preparing the AI model. This will take a few seconds.</p>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>Powered by Google Gemini &copy; 2026</p>
+  </footer>
+
+  <!-- App Script -->
+  <script src="app.js?v=4"></script>
+</body>
+</html>
