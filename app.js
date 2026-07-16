@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (state.hasApiToken) {
         // --- LIVE AI MODE: Direct browser call to Google Gemini ---
-        const prompt = "please create an image where these two people are posing together for the photo";
+        const prompt = "please create an image where these two people are posing together for the photo. The generated faces must remain highly accurate and true to the original faces in the reference image, preserving their exact facial features, details, expressions, and identities.";
         const localKey = localStorage.getItem('gemini_api_key');
         if (!localKey) {
           throw new Error('API key is missing. Please save it in the settings panel.');
