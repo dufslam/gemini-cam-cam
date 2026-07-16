@@ -59,8 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const ctx = elements.composerCanvas.getContext('2d');
   let cameraStream = null;
 
-  // Default password hash for "camcam"
-  const CORRECT_PASSWORD_HASH = "fc959a491e0a293f0b2f81a7b0ea77f3796d11f71df4ccf2bf9ad6097d4d7f76";
+  // Default password hash for "camcam" (using pure-JS simpleHash for compatibility)
+  const CORRECT_PASSWORD_HASH = "f5e67b47";
 
   // Initialize
   initApp();
@@ -133,18 +133,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // CORE CONTROLLERS
   // ==========================================================================
 
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  function simpleHash(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
   }
 
-  async function handleUnlock() {
+  function handleUnlock() {
     const password = elements.passwordInput.value.trim();
     if (!password) return;
 
-    const hash = await sha256(password);
+    const hash = simpleHash(password);
     if (hash === CORRECT_PASSWORD_HASH) {
       localStorage.setItem('gemini_cam_unlocked', 'true');
       elements.passwordOverlay.style.setProperty('display', 'none', 'important');
