@@ -180,9 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.capturePhotoBtn.classList.remove('hidden');
 
     try {
-      // Requested portrait dimensions (ideal 720 width, 1280 height) for natural mobile layout
+      // Use standard camera constraints (simplest and most compatible across all browsers/devices)
       cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+        video: { facingMode: 'user' },
         audio: false
       });
       elements.cameraVideo.srcObject = cameraStream;
@@ -212,18 +212,41 @@ document.addEventListener('DOMContentLoaded', () => {
   function captureSelfie() {
     const video = elements.cameraVideo;
     const canvas = elements.cameraCanvas;
-    const vWidth = video.videoWidth;
-    const vHeight = video.videoHeight;
+    
+    let vWidth = video.videoWidth || video.width || 640;
+    let vHeight = video.videoHeight || video.height || 480;
 
-    canvas.width = vWidth;
-    canvas.height = vHeight;
+    if (vWidth === 0) vWidth = 640;
+    if (vHeight === 0) vHeight = 480;
+
+    // Calculate crop to match the 3:4 portrait aspect ratio of the viewfinder container
+    const targetAspect = 3 / 4;
+    const currentAspect = vWidth / vHeight;
+    
+    let cropW, cropH, startX, startY;
+    if (currentAspect > targetAspect) {
+      // Stream is wider than 3:4 (standard landscape)
+      cropH = vHeight;
+      cropW = vHeight * targetAspect;
+      startX = (vWidth - cropW) / 2;
+      startY = 0;
+    } else {
+      // Stream is taller than 3:4
+      cropW = vWidth;
+      cropH = vWidth / targetAspect;
+      startX = 0;
+      startY = (vHeight - cropH) / 2;
+    }
+
+    canvas.width = cropW;
+    canvas.height = cropH;
 
     const cCtx = canvas.getContext('2d');
     
-    // Draw mirrored selfie to look natural to the user
-    cCtx.translate(vWidth, 0);
+    // Draw mirrored selfie cropped to 3:4 portrait
+    cCtx.translate(cropW, 0);
     cCtx.scale(-1, 1);
-    cCtx.drawImage(video, 0, 0, vWidth, vHeight);
+    cCtx.drawImage(video, startX, startY, cropW, cropH, 0, 0, cropW, cropH);
     
     const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
     loadSelfieImage(dataUrl);
