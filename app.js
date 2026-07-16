@@ -332,6 +332,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return tempCanvas.toDataURL('image/jpeg', 0.9);
   }
 
+  // Helper to extract base64 from image element securely
+  function getImageBase64(imgElement) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = imgElement.width;
+    tempCanvas.height = imgElement.height;
+    const tCtx = tempCanvas.getContext('2d');
+    tCtx.drawImage(imgElement, 0, 0);
+    return tempCanvas.toDataURL('image/jpeg', 0.95).split(',')[1];
+  }
+
   async function blendCompositeImage() {
     if (!state.originalSelfieImage || !state.camImage) return;
 
@@ -347,12 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     try {
-      // 1. Generate side-by-side composite
+      // Generate side-by-side composite (used as a fallback / mock preview)
       const compositeDataUrl = createSideBySideComposite();
 
       if (state.hasApiToken) {
         // --- LIVE AI MODE: Direct browser call to Google Gemini ---
-        const prompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene. The generated faces must remain highly accurate and true to the original faces in the reference image, preserving their exact facial features, details, expressions, and identities.";
         const localKey = localStorage.getItem('gemini_api_key');
         if (!localKey) {
           throw new Error('API key is missing. Please save it in the settings panel.');
@@ -380,11 +389,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Dynamically Selected Image Model:", modelName);
 
         const supportsGenerateImages = selectedModel.supportedGenerationMethods?.includes('generateImages') || modelName.includes('imagen');
-        const base64Data = compositeDataUrl.split(',')[1];
         let responseUrl = '';
 
         if (supportsGenerateImages) {
-          // --- LEGACY IMAGEN generateImages PATH ---
+          // --- LEGACY IMAGEN generateImages PATH (Single Text Prompt only) ---
+          const prompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene.";
           const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateImages?key=${localKey}`;
           const res = await fetch(url, {
             method: 'POST',
@@ -409,7 +418,13 @@ document.addEventListener('DOMContentLoaded', () => {
           responseUrl = `data:image/jpeg;base64,${base64Out}`;
 
         } else {
-          // --- NEW GEMINI generateContent PATH ---
+          // --- NEW GEMINI generateContent MULTIMODAL PATH ---
+          // Send BOTH photos as separate input reference files. This prevents the side-by-side layout bias!
+          const prompt = "Please create a single, unified photograph where the person from Image 1 (my selfie) and the person from Image 2 (Cam) are posing together, standing side-by-side in a cohesive environment. Do NOT split the screen or output a side-by-side composite; they must be fully blended into a single continuous scene. The faces must remain highly accurate and true to their respective original images, preserving their exact facial features, details, expressions, and identities.";
+          
+          const selfieBase64 = state.originalSelfieImage.src.split(',')[1];
+          const camBase64 = getImageBase64(state.camImage);
+
           const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${localKey}`;
           const res = await fetch(url, {
             method: 'POST',
@@ -423,7 +438,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                       inlineData: {
                         mimeType: "image/jpeg",
-                        data: base64Data
+                        data: selfieBase64
+                      }
+                    },
+                    {
+                      inlineData: {
+                        mimeType: "image/jpeg",
+                        data: camBase64
                       }
                     }
                   ]
