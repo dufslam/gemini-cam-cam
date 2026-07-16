@@ -324,39 +324,81 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error('API key is missing. Please save it in the settings panel.');
         }
 
-        // Parse base64 parts from data URL
+        // Fetch available models to dynamically select the active image generation model
+        const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${localKey}`);
+        if (!modelsRes.ok) {
+          throw new Error('Failed to fetch Google Gemini model list. Please check if your API Key is correct.');
+        }
+        const modelsData = await modelsRes.json();
+        const allModels = modelsData.models || [];
+        
+        // Find the best available image/imagen model dynamically
+        let selectedModel = allModels.find(m => m.name.includes('flash-image') || m.name.includes('pro-image'));
+        if (!selectedModel) {
+          selectedModel = allModels.find(m => m.name.includes('imagen') || m.name.includes('image'));
+        }
+
+        if (!selectedModel) {
+          throw new Error('Could not find an image generation model on your Google AI Studio account. Verify model list permissions.');
+        }
+
+        const modelName = selectedModel.name;
+        console.log("Dynamically Selected Image Model:", modelName);
+
+        const supportsGenerateImages = selectedModel.supportedGenerationMethods?.includes('generateImages') || modelName.includes('imagen');
         const base64Data = compositeDataUrl.split(',')[1];
-
-        // Call Google AI Studio endpoint directly from browser
         let responseUrl = '';
-        const body = {
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                {
-                  inlineData: {
-                    mimeType: "image/jpeg",
-                    data: base64Data
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"]
-          }
-        };
 
-        const tryModel = async (modelName) => {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${localKey}`;
+        if (supportsGenerateImages) {
+          // --- LEGACY IMAGEN generateImages PATH ---
+          const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateImages?key=${localKey}`;
           const res = await fetch(url, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: prompt + ", high-quality photograph, realistic details",
+              numberOfImages: 1,
+              outputMimeType: "image/jpeg",
+              aspectRatio: "1:1",
+              personGeneration: "ALLOW_ADULT"
+            })
+          });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error?.message || `HTTP ${res.status} from ${modelName}`);
+          }
+          const data = await res.json();
+          const base64Out = data.generatedImages?.[0]?.image?.imageBytes;
+          if (!base64Out) {
+            throw new Error('Model returned success but no image bytes.');
+          }
+          responseUrl = `data:image/jpeg;base64,${base64Out}`;
+
+        } else {
+          // --- NEW GEMINI generateContent PATH ---
+          const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${localKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    { text: prompt },
+                    {
+                      inlineData: {
+                        mimeType: "image/jpeg",
+                        data: base64Data
+                      }
+                    }
+                  ]
+                }
+              ],
+              generationConfig: {
+                responseModalities: ["TEXT", "IMAGE"]
+              }
+            })
           });
           if (!res.ok) {
             const errJson = await res.json().catch(() => ({}));
@@ -365,16 +407,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await res.json();
           const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
           if (!part) {
-            throw new Error(`Model ${modelName} returned content but no generated image data.`);
+            throw new Error('Model returned success but no generated image data.');
           }
-          return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-        };
-
-        try {
-          responseUrl = await tryModel("gemini-2.5-flash-image");
-        } catch (err) {
-          console.warn("gemini-2.5-flash-image failed, trying fallback model imagen-3.0-generate-002...", err);
-          responseUrl = await tryModel("imagen-3.0-generate-002");
+          responseUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
         }
 
         // Load the generated result
