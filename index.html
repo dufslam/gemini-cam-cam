@@ -15,6 +15,26 @@
 </head>
 <body>
 
+  <!-- PASSWORD PROTECTION OVERLAY -->
+  <div id="password-overlay" class="password-overlay">
+    <div class="password-card">
+      <div class="lock-icon-wrapper">
+        <i class="fa-solid fa-lock lock-glow-icon"></i>
+      </div>
+      <h2>Secure Access</h2>
+      <p>Please enter the password to open Gemini Cam Cam.</p>
+      <div class="form-group" style="margin-bottom: 0;">
+        <input type="password" id="app-password-input" placeholder="Enter password..." autocomplete="off">
+      </div>
+      <button id="unlock-btn" class="btn btn-accent btn-large" style="width: 100%; margin-top: 1rem;">
+        <i class="fa-solid fa-key"></i> Unlock App
+      </button>
+      <p id="password-error" class="error-text hidden" style="color: #ff4a4a; font-size: 0.9rem; margin-top: 0.8rem; text-align: center;">
+        Incorrect password. Please try again.
+      </p>
+    </div>
+  </div>
+
   <header class="app-header">
     <div class="header-container">
       <div class="app-logo">
@@ -152,6 +172,6 @@
   </footer>
 
   <!-- App Script -->
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

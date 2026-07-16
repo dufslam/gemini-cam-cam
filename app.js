@@ -26,6 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
     saveTokenBtn: document.getElementById('save-token-btn'),
     clearTokenBtn: document.getElementById('clear-token-btn'),
     
+    // Password protection
+    passwordOverlay: document.getElementById('password-overlay'),
+    passwordInput: document.getElementById('app-password-input'),
+    unlockBtn: document.getElementById('unlock-btn'),
+    passwordError: document.getElementById('password-error'),
+
     // Step 1
     step1: document.getElementById('step-1'),
     startCameraBtn: document.getElementById('start-camera-btn'),
@@ -53,10 +59,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const ctx = elements.composerCanvas.getContext('2d');
   let cameraStream = null;
 
+  // Default password hash for "camcam"
+  const CORRECT_PASSWORD_HASH = "fc959a491e0a293f0b2f81a7b0ea77f3796d11f71df4ccf2bf9ad6097d4d7f76";
+
   // Initialize
   initApp();
 
   async function initApp() {
+    // Check local storage for unlocked state
+    const isUnlocked = localStorage.getItem('gemini_cam_unlocked') === 'true';
+    if (isUnlocked && elements.passwordOverlay) {
+      elements.passwordOverlay.classList.add('hidden');
+    } else if (elements.passwordOverlay) {
+      elements.passwordOverlay.classList.remove('hidden');
+      elements.passwordInput.focus();
+    }
+
     // Check local storage for key
     state.hasApiToken = !!localStorage.getItem('gemini_api_key');
     updateBadge();
@@ -78,6 +96,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================================================
 
   function setupEventListeners() {
+    // Password Unlock Events
+    if (elements.unlockBtn) {
+      elements.unlockBtn.addEventListener('click', handleUnlock);
+    }
+    if (elements.passwordInput) {
+      elements.passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleUnlock();
+      });
+    }
+
     // Settings Panel Toggle
     elements.settingsBtn.addEventListener('click', () => {
       elements.settingsPanel.classList.toggle('hidden');
@@ -102,6 +130,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================================================
   // CORE CONTROLLERS
   // ==========================================================================
+
+  async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function handleUnlock() {
+    const password = elements.passwordInput.value.trim();
+    if (!password) return;
+
+    const hash = await sha256(password);
+    if (hash === CORRECT_PASSWORD_HASH) {
+      localStorage.setItem('gemini_cam_unlocked', 'true');
+      elements.passwordOverlay.classList.add('hidden');
+      elements.passwordError.classList.add('hidden');
+    } else {
+      elements.passwordError.classList.remove('hidden');
+      elements.passwordInput.value = '';
+      elements.passwordInput.focus();
+    }
+  }
 
   function updateBadge() {
     if (state.hasApiToken) {
