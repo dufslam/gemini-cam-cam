@@ -69,8 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check local storage for unlocked state
     const isUnlocked = localStorage.getItem('gemini_cam_unlocked') === 'true';
     if (isUnlocked && elements.passwordOverlay) {
+      elements.passwordOverlay.style.setProperty('display', 'none', 'important');
       elements.passwordOverlay.classList.add('hidden');
     } else if (elements.passwordOverlay) {
+      elements.passwordOverlay.style.setProperty('display', 'flex', 'important');
       elements.passwordOverlay.classList.remove('hidden');
       elements.passwordInput.focus();
     }
@@ -145,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hash = await sha256(password);
     if (hash === CORRECT_PASSWORD_HASH) {
       localStorage.setItem('gemini_cam_unlocked', 'true');
+      elements.passwordOverlay.style.setProperty('display', 'none', 'important');
       elements.passwordOverlay.classList.add('hidden');
       elements.passwordError.classList.add('hidden');
     } else {
