@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     step2: document.getElementById('step-2'),
     canvasContainer: document.getElementById('canvas-container'),
     composerCanvas: document.getElementById('composer-canvas'),
+    masterpieceImg: document.getElementById('masterpiece-img'),
     downloadBtn: document.getElementById('download-btn'),
 
     // Loader
@@ -179,8 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.capturePhotoBtn.classList.remove('hidden');
 
     try {
+      // Requested portrait dimensions (ideal 720 width, 1280 height) for natural mobile layout
       cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: false
       });
       elements.cameraVideo.srcObject = cameraStream;
@@ -189,6 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
       alert("Could not access your camera. Please check browser permissions or upload an image instead.");
       stopCamera();
     }
+  }
+
+  // Helper to check device orientation
+  function isDevicePortrait() {
+    return window.innerHeight > window.innerWidth;
   }
 
   function stopCamera() {
@@ -267,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
       canvas.height = (canvas.width * img.height) / img.width;
     } else {
       canvas.height = Math.min(img.height, maxDim);
-      canvas.width = (canvas.height * img.height) / img.height;
+      canvas.width = (canvas.height * img.width) / img.height;
     }
   }
 
@@ -304,6 +311,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function blendCompositeImage() {
     if (!state.originalSelfieImage || !state.camImage) return;
+
+    // Reset UI display elements
+    elements.composerCanvas.classList.remove('hidden');
+    elements.masterpieceImg.classList.add('hidden');
 
     showLoader(
       state.hasApiToken ? 'Gemini is merging photos...' : 'Loading mock preview...',
@@ -422,6 +433,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         state.selfieImage = generatedImg;
+
+        // Show the image overlay and hide canvas to allow tap-and-hold saving on mobile
+        elements.masterpieceImg.src = responseUrl;
+        elements.masterpieceImg.classList.remove('hidden');
+        elements.composerCanvas.classList.add('hidden');
+
       } else {
         // --- DEMO MOCK MODE: Just show the raw side-by-side composite ---
         const mockImg = new Image();
@@ -430,6 +447,10 @@ document.addEventListener('DOMContentLoaded', () => {
           mockImg.src = compositeDataUrl;
         });
         state.selfieImage = mockImg;
+
+        elements.masterpieceImg.src = compositeDataUrl;
+        elements.masterpieceImg.classList.remove('hidden');
+        elements.composerCanvas.classList.add('hidden');
       }
 
       // Configure dimensions and draw
@@ -445,13 +466,46 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
-  // EXPORT MASTERPIECE
+  // EXPORT MASTERPIECE (NATIVE SHARE SHEET OR DOWNLOAD FALLBACK)
   // ==========================================================================
 
   function downloadMasterpiece() {
     drawComposer();
-    const dataUrl = elements.composerCanvas.toDataURL('image/jpeg', 0.95);
+
+    const canvas = elements.composerCanvas;
     
+    // Try to use Web Share API for native "Save Image" to Photo Stream on iOS/Android
+    if (navigator.canShare && navigator.share) {
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          fallbackDownload(canvas);
+          return;
+        }
+        const file = new File([blob], `gemini-cam-cam-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Gemini Cam Cam Masterpiece',
+              text: 'Look at me standing next to Cam!'
+            });
+            console.log("Masterpiece shared successfully via native share sheet.");
+          } catch (err) {
+            console.warn("Share sheet cancelled or failed, falling back to download:", err);
+            fallbackDownload(canvas);
+          }
+        } else {
+          fallbackDownload(canvas);
+        }
+      }, 'image/jpeg', 0.95);
+    } else {
+      fallbackDownload(canvas);
+    }
+  }
+
+  function fallbackDownload(canvas) {
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
     const link = document.createElement('a');
     link.download = `gemini-cam-cam-masterpiece-${Date.now()}.jpg`;
     link.href = dataUrl;
