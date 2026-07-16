@@ -393,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (supportsGenerateImages) {
           // --- LEGACY IMAGEN generateImages PATH (Single Text Prompt only) ---
-          const prompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene.";
+          const prompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). CRITICAL REQUIREMENT: Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene with no borders, panels, or comparisons.";
           const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateImages?key=${localKey}`;
           const res = await fetch(url, {
             method: 'POST',
@@ -420,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           // --- NEW GEMINI generateContent MULTIMODAL PATH ---
           // Send BOTH photos as separate input reference files. This prevents the side-by-side layout bias!
-          const prompt = "Please create a single, unified photograph where the person from Image 1 (my selfie) and the person from Image 2 (Cam) are posing together, standing side-by-side in a cohesive environment. Do NOT split the screen or output a side-by-side composite; they must be fully blended into a single continuous scene. The faces must remain highly accurate and true to their respective original images, preserving their exact facial features, details, expressions, and identities.";
+          const prompt = "Please create a single, unified photograph where the person from Image 1 (my selfie) and the person from Image 2 (Cam) are posing together, standing side-by-side in a cohesive environment. CRITICAL REQUIREMENT: Do NOT split the output image into two halves. Do NOT show the reference photos as a split-screen or side-by-side comparison. You must generate a single cohesive photo of the two people standing together in a single unified setting with no borders, panels, or frames. Treat this as a single portrait shot. The faces must remain highly accurate and true to their respective original images, preserving their exact facial features, details, expressions, and identities.";
           
           const selfieBase64 = state.originalSelfieImage.src.split(',')[1];
           const camBase64 = getImageBase64(state.camImage);
