@@ -14,10 +14,32 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Both selfie and cam images are required in the request body.' });
     }
 
-    console.log('Serverless: Calling Google Gemini API directly via fetch...');
+    console.log('Serverless: Querying active models on user account...');
 
-    // Call Google Gemini API directly using Node native fetch (avoids any SDK version incompatibilities)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${token}`;
+    // 1. Fetch available models dynamically from the user's Google AI Studio account
+    const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${token}`);
+    if (!modelsRes.ok) {
+      throw new Error(`Failed to query Google Gemini models: HTTP ${modelsRes.status}`);
+    }
+    const modelsData = await modelsRes.json();
+    const allModels = modelsData.models || [];
+
+    // 2. Select the best image generation model available on their account
+    let selectedModel = allModels.find(m => m.name.includes('flash-image') || m.name.includes('pro-image'));
+    if (!selectedModel) {
+      selectedModel = allModels.find(m => m.name.includes('imagen') || m.name.includes('image'));
+    }
+
+    if (!selectedModel) {
+      // Fallback if no specific match
+      selectedModel = { name: 'models/gemini-2.5-flash-image' };
+    }
+
+    const modelName = selectedModel.name;
+    console.log(`Serverless: Dynamically selected model: ${modelName}`);
+
+    // 3. Call the selected model
+    const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${token}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
