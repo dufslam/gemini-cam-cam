@@ -1,5 +1,3 @@
-const { GoogleGenAI } = require('@google/genai');
-
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -16,55 +14,54 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Both selfie and cam images are required in the request body.' });
     }
 
-    const ai = new GoogleGenAI({ apiKey: token });
-    console.log('Serverless: Calling Google Gen AI Nano Banana image model...');
-    
-    let interaction;
-    try {
-      interaction = await ai.interactions.create({
-        model: "gemini-2.5-flash-image",
-        input: [
-          { type: "text", text: prompt || "Please create a single, unified photograph of these two people posing together, standing side-by-side, smiling." },
-          { 
-            type: "image", 
-            data: selfie, 
-            mime_type: "image/jpeg"
-          },
+    console.log('Serverless: Calling Google Gemini API directly via fetch...');
+
+    // Call Google Gemini API directly using Node native fetch (avoids any SDK version incompatibilities)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${token}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
           {
-            type: "image", 
-            data: cam, 
-            mime_type: "image/jpeg"
+            role: "user",
+            parts: [
+              { text: prompt || "Please create a single, unified photograph of these two people posing together, standing side-by-side, smiling." },
+              { 
+                inlineData: { 
+                  mimeType: "image/jpeg", 
+                  data: selfie 
+                } 
+              },
+              { 
+                inlineData: { 
+                  mimeType: "image/jpeg", 
+                  data: cam 
+                } 
+              }
+            ]
           }
-        ]
-      });
-    } catch (modelErr) {
-      console.warn("Serverless: Failed with gemini-2.5-flash-image, trying fallback...", modelErr.message);
-      interaction = await ai.interactions.create({
-        model: "imagen-3.0-generate-002",
-        input: [
-          { type: "text", text: prompt || "Please create a single, unified photograph of these two people posing together, standing side-by-side, smiling." },
-          { 
-            type: "image", 
-            data: selfie, 
-            mime_type: "image/jpeg"
-          },
-          {
-            type: "image", 
-            data: cam, 
-            mime_type: "image/jpeg"
-          }
-        ]
-      });
+        ],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"]
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || `HTTP ${response.status} from Google Gemini API`);
     }
 
-    if (interaction && interaction.output_image && interaction.output_image.data) {
-      const outputDataUri = `data:image/jpeg;base64,${interaction.output_image.data}`;
-      console.log('Serverless: Image generation successful!');
-      res.status(200).json({ imageUrl: outputDataUri });
-    } else {
-      console.error('Serverless: Interaction response did not contain output image:', interaction);
-      throw new Error('Unexpected output format from Google Gen AI image model');
+    const data = await response.json();
+    const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+    if (!part) {
+      throw new Error('Model returned success but no generated image data.');
     }
+
+    const outputDataUri = `data:${part.inlineData.mimeType || 'image/jpeg'};base64,${part.inlineData.data}`;
+    console.log('Serverless: Image generation successful!');
+    res.status(200).json({ imageUrl: outputDataUri });
 
   } catch (error) {
     console.error('Serverless Error:', error);
