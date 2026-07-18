@@ -77,8 +77,14 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.passwordInput.focus();
     }
 
-    // Check local storage for key
-    state.hasApiToken = !!localStorage.getItem('gemini_api_key');
+    // Check server config for token first, then fallback to local storage key
+    try {
+      const res = await fetch('/api/config');
+      const config = await res.json();
+      state.hasApiToken = config.hasToken || !!localStorage.getItem('gemini_api_key');
+    } catch (e) {
+      state.hasApiToken = !!localStorage.getItem('gemini_api_key');
+    }
     updateBadge();
 
     // Retrieve saved token if any
@@ -416,110 +422,124 @@ document.addEventListener('DOMContentLoaded', () => {
       const compositeDataUrl = createSideBySideComposite();
 
       if (state.hasApiToken) {
-        // --- LIVE AI MODE: Direct browser call to Google Gemini ---
         const localKey = localStorage.getItem('gemini_api_key');
-        if (!localKey) {
-          throw new Error('API key is missing. Please save it in the settings panel.');
-        }
-
-        // Fetch available models to dynamically select the active image generation model
-        const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${localKey}`);
-        if (!modelsRes.ok) {
-          throw new Error('Failed to fetch Google Gemini model list. Please check if your API Key is correct.');
-        }
-        const modelsData = await modelsRes.json();
-        const allModels = modelsData.models || [];
+        const prompt = "Please create a single, unified photograph where the person from Image 1 (my selfie) and the person from Image 2 (Cam) are posing together, standing side-by-side in a cohesive environment. CRITICAL REQUIREMENT: Do NOT split the output image into two halves. Do NOT show the reference photos as a split-screen or side-by-side comparison. You must generate a single cohesive photo of the two people standing together in a single unified setting with no borders, panels, or frames. Treat this as a single portrait shot. The faces must remain highly accurate and true to their respective original images, preserving their exact facial features, details, expressions, and identities.";
         
-        // Find the best available image/imagen model dynamically
-        let selectedModel = allModels.find(m => m.name.includes('flash-image') || m.name.includes('pro-image'));
-        if (!selectedModel) {
-          selectedModel = allModels.find(m => m.name.includes('imagen') || m.name.includes('image'));
-        }
-
-        if (!selectedModel) {
-          throw new Error('Could not find an image generation model on your Google AI Studio account. Verify model list permissions.');
-        }
-
-        const modelName = selectedModel.name;
-        console.log("Dynamically Selected Image Model:", modelName);
-
-        const supportsGenerateImages = selectedModel.supportedGenerationMethods?.includes('generateImages') || modelName.includes('imagen');
+        const selfieBase64 = state.originalSelfieImage.src.split(',')[1];
+        const camBase64 = getImageBase64(state.camImage);
         let responseUrl = '';
 
-        if (supportsGenerateImages) {
-          // --- LEGACY IMAGEN generateImages PATH (Single Text Prompt only) ---
-          const prompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). CRITICAL REQUIREMENT: Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene with no borders, panels, or comparisons.";
-          const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateImages?key=${localKey}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: prompt + ", high-quality photograph, realistic details",
-              numberOfImages: 1,
-              outputMimeType: "image/jpeg",
-              aspectRatio: "1:1",
-              personGeneration: "ALLOW_ADULT"
-            })
-          });
-          if (!res.ok) {
-            const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error?.message || `HTTP ${res.status} from ${modelName}`);
+        if (localKey) {
+          // --- LIVE AI MODE: Direct browser call to Google Gemini (uses local key) ---
+          // Fetch available models to dynamically select the active image generation model
+          const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${localKey}`);
+          if (!modelsRes.ok) {
+            throw new Error('Failed to fetch Google Gemini model list. Please check if your API Key is correct.');
           }
-          const data = await res.json();
-          const base64Out = data.generatedImages?.[0]?.image?.imageBytes;
-          if (!base64Out) {
-            throw new Error('Model returned success but no image bytes.');
-          }
-          responseUrl = `data:image/jpeg;base64,${base64Out}`;
-
-        } else {
-          // --- NEW GEMINI generateContent MULTIMODAL PATH ---
-          // Send BOTH photos as separate input reference files. This prevents the side-by-side layout bias!
-          const prompt = "Please create a single, unified photograph where the person from Image 1 (my selfie) and the person from Image 2 (Cam) are posing together, standing side-by-side in a cohesive environment. CRITICAL REQUIREMENT: Do NOT split the output image into two halves. Do NOT show the reference photos as a split-screen or side-by-side comparison. You must generate a single cohesive photo of the two people standing together in a single unified setting with no borders, panels, or frames. Treat this as a single portrait shot. The faces must remain highly accurate and true to their respective original images, preserving their exact facial features, details, expressions, and identities.";
+          const modelsData = await modelsRes.json();
+          const allModels = modelsData.models || [];
           
-          const selfieBase64 = state.originalSelfieImage.src.split(',')[1];
-          const camBase64 = getImageBase64(state.camImage);
+          // Find the best available image/imagen model dynamically
+          let selectedModel = allModels.find(m => m.name.includes('flash-image') || m.name.includes('pro-image'));
+          if (!selectedModel) {
+            selectedModel = allModels.find(m => m.name.includes('imagen') || m.name.includes('image'));
+          }
 
-          const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${localKey}`;
-          const res = await fetch(url, {
+          if (!selectedModel) {
+            throw new Error('Could not find an image generation model on your Google AI Studio account. Verify model list permissions.');
+          }
+
+          const modelName = selectedModel.name;
+          console.log("Dynamically Selected Image Model:", modelName);
+
+          const supportsGenerateImages = selectedModel.supportedGenerationMethods?.includes('generateImages') || modelName.includes('imagen');
+
+          if (supportsGenerateImages) {
+            // --- LEGACY IMAGEN generateImages PATH (Single Text Prompt only) ---
+            const legacyPrompt = "Please create a single, unified photograph of these two people posing together in the same camera frame. You must blend them seamlessly into a single environment (like standing side-by-side next to each other). CRITICAL REQUIREMENT: Do NOT output two separate images side-by-side or split the screen; they must be fully integrated into a single cohesive scene with no borders, panels, or comparisons.";
+            const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateImages?key=${localKey}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: legacyPrompt + ", high-quality photograph, realistic details",
+                numberOfImages: 1,
+                outputMimeType: "image/jpeg",
+                aspectRatio: "1:1",
+                personGeneration: "ALLOW_ADULT"
+              })
+            });
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({}));
+              throw new Error(errJson.error?.message || `HTTP ${res.status} from ${modelName}`);
+            }
+            const data = await res.json();
+            const base64Out = data.generatedImages?.[0]?.image?.imageBytes;
+            if (!base64Out) {
+              throw new Error('Model returned success but no image bytes.');
+            }
+            responseUrl = `data:image/jpeg;base64,${base64Out}`;
+
+          } else {
+            // --- NEW GEMINI generateContent MULTIMODAL PATH ---
+            const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${localKey}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: "user",
+                    parts: [
+                      { text: prompt },
+                      {
+                        inlineData: {
+                          mimeType: "image/jpeg",
+                          data: selfieBase64
+                        }
+                      },
+                      {
+                        inlineData: {
+                          mimeType: "image/jpeg",
+                          data: camBase64
+                        }
+                      }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseModalities: ["TEXT", "IMAGE"]
+                }
+              })
+            });
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({}));
+              throw new Error(errJson.error?.message || `HTTP ${res.status} from ${modelName}`);
+            }
+            const data = await res.json();
+            const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+            if (!part) {
+              throw new Error('Model returned success but no generated image data.');
+            }
+            responseUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          }
+        } else {
+          // --- LIVE AI MODE: Call our secure serverless backend endpoint ---
+          const res = await fetch('/api/blend-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    { text: prompt },
-                    {
-                      inlineData: {
-                        mimeType: "image/jpeg",
-                        data: selfieBase64
-                      }
-                    },
-                    {
-                      inlineData: {
-                        mimeType: "image/jpeg",
-                        data: camBase64
-                      }
-                    }
-                  ]
-                }
-              ],
-              generationConfig: {
-                responseModalities: ["TEXT", "IMAGE"]
-              }
+              selfie: selfieBase64,
+              cam: camBase64,
+              prompt: prompt
             })
           });
           if (!res.ok) {
-            const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error?.message || `HTTP ${res.status} from ${modelName}`);
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${res.status} from server`);
           }
           const data = await res.json();
-          const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-          if (!part) {
-            throw new Error('Model returned success but no generated image data.');
-          }
-          responseUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          responseUrl = data.imageUrl;
         }
 
         // Load the generated result
