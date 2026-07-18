@@ -1,4 +1,12 @@
 {
   "version": 2,
-  "cleanUrls": true
+  "builds": [
+    { "src": "config.js", "use": "@vercel/node" },
+    { "src": "blend-image.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/config", "dest": "config.js" },
+    { "src": "/api/blend-image", "dest": "blend-image.js" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
 }
